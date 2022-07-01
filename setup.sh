@@ -42,7 +42,7 @@ cd oaic-testing
 
 #Near real time ric
 cd RIC-Deployment/bin
-./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release_modified_e2.yaml
+./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release.yaml
 cd ~/
 cd oaicinstaller
 cd oaic-testing
