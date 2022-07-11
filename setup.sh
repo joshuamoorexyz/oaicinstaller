@@ -1,13 +1,15 @@
+#!/usr/bin/env bash
 
 #install dependencies
 apt-get install git build-essential cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev libconfig++-dev libsctp-dev libtool autoconf -y
 
 #clone oaic repo and pull submodules
-git clone https://github.com/openaicellular/oaic.git
-cd oaic
-git submodule update --init --recursive
+git clone https://github.com/joshuamoorexyz/oaic-testing.git
+cd oaic-testing
 
+#export $rootdir="${pwd/}"
 
+#echo $rootdir
 #Near real time RIC installation
 cd RIC-Deployment/tools/k8s/bin
 ./gen-cloud-init.sh
@@ -24,17 +26,26 @@ apt install nfs-common
 
 #modified E2 docker image
 sudo docker run -d -p 5001:5000 --restart=always --name ric registry:2
-cd ../../../../ric-plt-e2/
+
+
+cd ~/
+cd oaicinstaller
+cd oaic-testing
+cd /ric-plt-e2/
 cd RIC-E2-TERMINATION
 docker build -f Dockerfile -t localhost:5001/ric-plt-e2:5.5.0 .
 docker push localhost:5001/ric-plt-e2:5.5.0
-cd ../../
+cd ~/
+cd oaicinstaller
+cd oaic-testing
 
 
 #Near real time ric
 cd RIC-Deployment/bin
-./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release_modified_e2.yaml
-cd ../
+./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release.yaml
+cd ~/
+cd oaicinstaller
+cd oaic-testing
 
 #srsRAN with E2 installation
 apt-get install libzmq3-dev
@@ -52,8 +63,9 @@ autoreconf -iv
 make -j`nproc`
 make install
 ldconfig
-cd ..
-
+cd ~/
+cd oaicinstaller
+cd oaic-testing
 
 
 cd srsRAN-e2
@@ -69,7 +81,8 @@ make test
 sudo make install
 sudo ldconfig
 srsran_install_configs.sh user --force
-cd ../../
-
+cd ~/
+cd oaicinstaller
+cd oaic-testing
 
 
