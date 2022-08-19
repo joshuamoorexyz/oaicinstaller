@@ -39,13 +39,9 @@ COPY config /root/.kube/config
 # RUN curl https://host.docker.internal:60086/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
 # RUN curl https://127.0.0.1:60086/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
 
-#influxdb setup
-RUN if [kubectl get ns ricinfra]; then kubectl create ns ricinfra; fi;
-RUN helm install stable/nfs-server-provisioner --namespace ricinfra --name nfs-release-1
-RUN kubectl patch storageclass nfs -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-# RUN apt install nfs-common
-
 WORKDIR /root
+
+RUN echo hi
 
 # RUN rm -rf .kube
 # RUN mkdir -p .kube
@@ -54,28 +50,30 @@ WORKDIR /root
 # ENV KUBECONFIG=/root/.kube/config
 # RUN echo "KUBECONFIG=${KUBECONFIG}" >> /etc/environment
 
-RUN kubectl --insecure-skip-tls-verify get pods --all-namespaces
+RUN kubectl get pods --all-namespaces
 
-RUN kubectl --insecure-skip-tls-verify apply -f "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+# kindnet by default does not include bridge which is used in Helm so we have to use this script to install it with bridge
+RUN kubectl create -f "https://raw.githubusercontent.com/aojea/kindnet/master/install-kindnet-bridge.yaml"
 
+RUN kubectl apply -f "https://raw.githubusercontent.com/flannel-io/flannel/9de10c12c8266b0cfe09bc0d5c969ae28832239f/Documentation/kube-flannel.yml"
+
+# When using kind, another pod called kindnet is deployed, so the total becomes 9 pods in kube-system.
+# Also note that the etcd server is called etcd-kind-control-plane
 RUN CMD="kubectl get pods --all-namespaces " && \
   if [ "kube-system" != "all-namespaces" ]; then \
-    CMD="kubectl get pods -n 8 "; \
+    CMD="kubectl get pods -n kube-system "; \
   fi && \
   KEYWORD="Running" && \
-  if [ "$#" == "3" ]; then \
-    KEYWORD="${3}.*Running"; \
-  fi && \
   CMD2="$CMD | grep \"$KEYWORD\" | wc -l" && \
   NUMPODS=$(eval "$CMD2") && \
-  echo "waiting for $NUMPODS/8 pods running in namespace [$NS] with keyword [$KEYWORD]" && \
-  while [  $NUMPODS -lt $1 ]; do \
+  echo "waiting for $NUMPODS/9 pods running in namespace [kube-system] with keyword [$KEYWORD]" && \
+  while [  $NUMPODS -lt 9 ]; do \
     sleep 5; \
     NUMPODS=$(eval "$CMD2"); \
-    echo "> waiting for $NUMPODS/8 pods running in namespace [$NS] with keyword [$KEYWORD]"; \
+    echo "> waiting for $NUMPODS/9 pods running in namespace [kube-system] with keyword [$KEYWORD]"; \
   done 
 
-RUN kubectl taint nodes --all node-role.kubernetes.io/master-
+RUN kubectl taint nodes --all node-role.kubernetes.io/master-; exit 0;
 
 # ENV HELMV="2.17.0"
 # ENV HELMVERSION=${HELMV}
@@ -98,29 +96,36 @@ RUN kubectl create -f rbac-config.yaml
 RUN helm init --service-account tiller --override spec.selector.matchLabels.'name'='tiller',spec.selector.matchLabels.'app'='helm' --output yaml > /tmp/helm-init.yaml
 RUN sed 's@apiVersion: extensions/v1beta1@apiVersion: apps/v1@' /tmp/helm-init.yaml > /tmp/helm-init-patched.yaml
 RUN kubectl apply -f /tmp/helm-init-patched.yaml
-
 RUN helm init -c
 ENV HELM_HOME="/root/.helm"
 
-RUN while ! helm version; do echo "Waiting for Helm to be ready" && sleep 15 done
+RUN while ! helm version; do echo "Waiting for Helm to be ready" && sleep 15; done
 
 RUN echo "Preparing a master node (lowser ID) for using local FS for PV"
 RUN kubectl label --overwrite nodes $(kubectl get nodes |grep master | cut -f1 -d' ' | sort | head -1) local-storage=enable
 
 RUN echo "Done with master node setup"
 
+#influxdb setup
+RUN if [kubectl get ns ricinfra]; then kubectl create ns ricinfra; fi;
+RUN helm install stable/nfs-server-provisioner --namespace ricinfra --name nfs-release-1
+RUN kubectl patch storageclass nfs -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+# RUN apt install nfs-common
+
 # RUN cp /etc/docker/ca.crt /etc/docker/certs.d/:/ca.crt
 # RUN service docker restart
 # RUN systemctl enable docker.service
-RUN docker login -u  -p  :
-RUN docker pull :/whoami:0.0.1
+# RUN docker login -u  -p  :
+# RUN docker pull :/whoami:0.0.1
 
 #modified E2 docker image
-RUN docker run -d -p 5001:5000 --restart=always --name ric registry:2
-WORKDIR /oaic/ric-plt-e2/RIC-E2-TERMINATION
-RUN docker build -f Dockerfile -t localhost:5001/ric-plt-e2:5.5.0 .
-RUN docker push localhost:5001/ric-plt-e2:5.5.0
+# RUN docker run -d -p 5001:5000 --restart=always --name ric registry:2
+# WORKDIR /oaic/ric-plt-e2/RIC-E2-TERMINATION
+# RUN docker build -f Dockerfile -t localhost:5001/ric-plt-e2:5.5.0 .
+# RUN docker push localhost:5001/ric-plt-e2:5.5.0
 
 #Near real time ric
 WORKDIR /oaic/RIC-Deployment/bin
-RUN ./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release_modified_e2.yaml
+RUN ./deploy-ric-platform -f ../RECIPE_EXAMPLE/PLATFORM/example_recipe_oran_e_release.yaml
+
+RUN kubectl set image deployment/deployment-tiller-ricxapp tiller=ghcr.io/helm/tiller:v2.12.3 -n ricinfra

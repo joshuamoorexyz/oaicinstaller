@@ -1,0 +1,40 @@
+FROM ubuntu:20.04
+
+#srsRAN with E2 installation
+RUN apt-get update
+RUN apt-get install -y software-properties-common
+RUN add-apt-repository ppa:ettusresearch/uhd -y
+RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+RUN apt-get install -y git build-essential cmake libfftw3-dev libmbedtls-dev libboost-program-options-dev \
+libconfig++-dev libsctp-dev libtool autoconf virt-what curl jq netcat make ipset moreutils apt-transport-https \
+ca-certificates curl libzmq3-dev libuhd-dev libuhd4.2.0 uhd-host
+
+RUN git clone https://github.com/openaicellular/oaic.git
+WORKDIR /oaic
+RUN git submodule update --init --recursive
+
+#asn1c Compiler installation
+RUN git clone https://gitlab.eurecom.fr/oai/asn1c.git
+WORKDIR /oaic/asn1c
+RUN git checkout velichkov_s1ap_plus_option_group
+RUN autoreconf -iv
+RUN ./configure
+RUN make -j`nproc`
+RUN make install
+RUN ldconfig
+
+WORKDIR /oaic/srsRAN-e2
+RUN mkdir build
+ENV SRS=/oaic/srsRAN-e2
+WORKDIR /oaic/srsRAN-e2/build
+RUN cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebInfo -DRIC_GENERATED_E2AP_BINDING_DIR=${SRS}/e2_bindings/E2AP-v01.01 -DRIC_GENERATED_E2SM_KPM_BINDING_DIR=${SRS}/e2_bindings/E2SM-KPM -DRIC_GENERATED_E2SM_GNB_NRT_BINDING_DIR=${SRS}/e2_bindings/E2SM-GNB-NRT
+RUN make -j`nproc`
+# RUN make test
+RUN make install
+RUN ldconfig
+RUN srsran_install_configs.sh user
+
+EXPOSE 2000/tcp
+EXPOSE 2001/tcp
+EXPOSE 2100/tcp
+EXPOSE 2101/tcp

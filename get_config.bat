@@ -1,0 +1,1 @@
+copy %userprofile%\.kube\config config
