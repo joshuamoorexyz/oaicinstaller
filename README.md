@@ -36,6 +36,7 @@ If you remove the kind container and have to redeploy it again, the above steps 
 
 From the `oaic` repository, follow these steps:
 ```bash
+sudo docker run -d -p 5001:5000 --restart=always --name ric registry:2
 cd ric-plt-e2
 cd RIC-E2-TERMINATION
 sudo docker build -f Dockerfile -t localhost:5001/ric-plt-e2:5.5.0 .
